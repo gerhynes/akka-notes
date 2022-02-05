@@ -95,7 +95,104 @@ You would need a data structure that can safely receive messages, can identify t
 
 Tracing and dealing with errors in a multithreaded environment is a pain, even in small systems.
 
+## Akka Actors
 
+With traditional objects, you model your code around instances of classes.
 
+With objects:
+- you store their state as data
+- you call their methods
 
+With actors:
+- you store their state as data
+- you send messages to them, asynchronously
 
+Actors are objects you can't access directly, but can only send messages to.
+
+Working with actors is like asking someone for information and waiting for their response.
+
+Every interaction happens via sending and receiving messages.
+
+These messages are asynchronous by nature:
+- it takes time for a message to travel
+- receiving and responding may not happen at the same time
+- sending and receiving might not even happen in the same context
+
+### Actors, Messages and Behaviours
+Every Akka application starts with an ActorSystem.
+
+An ActorSystem is a heavyweight data structure that controls a number of threads under the hood and allocates them to running actors.
+
+You should have one ActorSystem per application unless you have a good reason to create more. The ActorSystem's name must contain only alphanumeric characters and non-leading hyphens or underscores. Actors can be located by their actor system.
+
+```Scala
+val actorSystem = ActorSystem("firstActorSystem")
+
+println(actorSystem.name) // firstActorSystem
+```
+
+- Actors are uniqualy identified
+- Messages are asynchronously
+- Each actor has a unique way of processing the message
+- Actors are (really) encapsulated
+
+### Creating an Actor
+You create an actor by creating a class that extends the ``Actor`` trait.
+
+An actor needs a `receive` method. It takes no arguments and its return type is ` PartialFunction[Any, Unit]` also aliased by the type `Receive`.
+
+You communicate with an actor by instantiating it (really an ActorRef) and then sending it a message.
+
+You can't instantiate an actor by calling new but by invoking the ActorSystem. You pass in a Props object (typed with the actor type you want to instantiate) and the name for the actor.
+
+The name restrictions for actors are the same as for the ActorSystem.
+
+Instantiating an actor produces an ActorRef, the data structure that Akka exposes to you since you can't call the actual actor instance itself. You can only communicatew with an actor via an ActorRef.
+
+The method to invoke an ActorRef is `!`, also known as `tell` (Scala is very permissive about method naming).
+
+```Scala
+class WordCountActor extends Actor {
+	// internal data
+	var totalWords = 0
+
+	// behavior
+	def receive: Receive = {
+		case message: String =>
+			println(s"[word counter] I have received: $message")
+			totalWords += message.split(" ").length
+		case msg => println(s"[word counter] I cannot understand ${msg.toString}")
+	}
+}
+
+// instantiating
+val wordCounter = actorSystem.actorOf(Props[WordCountActor], "wordCounter")
+
+val anotherWordCounter = actorSystem.actorOf(Props[WordCountActor], "anotherWordCounter")
+
+// communicating - these are completely asynchronous
+wordCounter ! "I am learning Akka and it's pretty cool!" // "tell"
+anotherWordCounter ! "A different message"
+```
+
+### Actors with Constructor Arguments
+You can instantiate an actor with constructor arguments using Props with an argument.
+
+The best practice is to declare a companion object and define a method that returns a Props object. You don't create actor instances yourself. Instead the factory method creates Props with actor instances for you.
+
+```Scala
+// best practice for creating actors with constructor arguments
+object Person {  
+  def props(name: String) = Props(new Person(name))  
+}  
+  
+class Person(name: String) extends Actor {  
+	override def receive: Receive = {  
+	  case "hi" => println(s"Hi, my name is $name")  
+	  case _ =>  
+	}  
+}  
+  
+val person = actorSystem.actorOf(Person.props("Bob"))  
+person ! "hi"
+```
