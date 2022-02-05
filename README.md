@@ -83,3 +83,19 @@ val aNonsenseFuture = for {
 	filteredMeaning <- filteredFuture
 } yield meaningOfLife + filteredMeaning
 ```
+
+### Thread Model Limitations
+OOP encapsulation is arguably only valid in the single-threaded model because of race conditions. Locks solve one problem but introduce others, such as deadlocks and livelocks.
+
+You would need a data structure that is fully encapsulated and with no locks.
+
+Delegating something to an already running thread is a pain. What if you need to send other signals? What if there are multiple background tasks? How do you identify who gave the signal? What if the background thread crashes?
+
+You would need a data structure that can safely receive messages, can identify the sender, is easily identifiable, and can guard against errors.
+
+Tracing and dealing with errors in a multithreaded environment is a pain, even in small systems.
+
+
+
+
+
