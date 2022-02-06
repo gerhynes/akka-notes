@@ -196,3 +196,111 @@ class Person(name: String) extends Actor {
 val person = actorSystem.actorOf(Person.props("Bob"))  
 person ! "hi"
 ```
+
+### Messages
+Messages can be of (almost) any type.
+
+You can send any primitive type by default. You can also define your own.
+
+When you invoke the tell method, Akka retrieves the object that will then be invoked on the message type that you sent.
+
+Because an actor uses a partial function you can include any number of cases and the message will be subject to pattern matching.
+
+```Scala
+class SimpleActor extends Actor {
+	override def receive: Receive = {
+		case "Hi!" => sender() ! "Hello, there!" // replying to a message
+		case message: String => println(s"[$self] I have received $message")
+		case number: Int => println(s"[simple actor] I have received a NUMBER: $number")
+		case SpecialMessage(contents) => println(s"[simple actor] I have received something SPECIAL: $contents")
+		case SendMessageToYourself(content) =>
+			self ! content
+		case SayHiTo(ref) => ref ! "Hi!" // alice is being passed as the sender
+		case WirelessPhoneMessage(content, ref) => ref forward (content + "s") // keeps the original sender of the WPM
+	}
+}
+```
+
+Messages can be almost any type but:
+- they must be immutable
+- they must be serializable
+
+You need to enforce this principle since it currently can't be checked for at compile time.
+
+In practice, you'll use case classes and case objects for almost all your message needs.
+
+### Context
+Actors have information about their context and about themselves.
+
+Each actor has a member called `context`, a complex data structure with information about the environment the actor runs in.
+
+`context.self` gives you access to the actors own ActorRef (the equivalen tof `this` in the object-oriented world). 
+
+You can use `self` to have an actor send a message to itself.
+
+Actors can reply to messages using `context`. `context.sender()` returns an ActorRef which you can then use to send a message back.
+
+For every actor, at any moment in time `context.sender()` contains the ActorReference of the last actor that sent a message to it. `context.sender()` can also be written as `sender`.
+
+Whenever an actor sends a message to another actor, they pass themselves as the sender.
+
+The tell method receives the message and an implicit sender parameter, `Actor.noSender`, which is null. Since `self` is an implicit value, you usually omit it as a parameter.
+
+```Scala
+// under the hood
+def !(message: Any)(implicit sender: ActorRef = Actor.noSender): Unit
+
+final val noSender: ActorRef = null
+
+// inside SinmpleActor
+case SayHiTo(ref) => ref ! "Hi!" // equivalent to (ref ! "Hi!")(self)
+```
+
+if there is no sender, the reply will go to a fake actor called  `dead letters` because `Actor.noSender` has a default value of null.
+
+Actors can forward messages to one another.
+
+```Scala
+case class WirelessPhoneMessage(content: String, ref: ActorRef)  
+alice ! WirelessPhoneMessage("Hi", bob) // noSender.
+
+// inside SimpleActor
+case WirelessPhoneMessage(content, ref) => ref forward (content + "s") // keeps the original sender of the WPM
+```
+
+### Actor Recap
+Every actor derives from the `Actor` trait, which has the abstract method `receive`.
+
+`receive` returns a message handler object, which is retrieved by Akka when an actor receives a message.
+
+This handler is invoked when the actor processes a message.
+
+The `Receive` type is an alias of `PartialFunction[Any, Unit]`.
+
+Actors need infrastructure in the form of an ActorSystem.
+
+```Scala
+val system = ActorSystem("AnActorSystem")
+```
+
+Creating an actor is done via the actor system, not via a new constructor. You need to call the `àctorOf` factory method from the system, passing in a Props object ( a data structure with create/deploy information).
+
+```Scala
+val actor = system.actorOf(Props[MyActor], "myActorName")
+```
+
+The only way you can communicate with an actor is by sending messages by invoking the tell method, `!`, with the message that you want to send.
+
+Messages can be of any type as long as they are immutable and serializable.
+
+By its design, Akka enforces the actor principles:
+
+- Actors are fully encapsulated. You cannot create actors manually and cannot directly call their methods.
+- Actors run in parallel.
+- Actors react to messages in a non-blocking and asynchronous manner.
+
+You can communicate with actors using actor references. These can be sent as parts of messages.
+
+Actors are aware of their own reference using `self`.
+
+Actors are aware of the actor reference that last sent them a message using `sender()` and can use this to reply to messages: `sender()` ! "well, hello there".
