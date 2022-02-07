@@ -336,3 +336,42 @@ val counter = system.actorOf(Props[Counter], "myCounter")
 (1 to 3).foreach(_ => counter ! Decrement)  
 counter ! Print
 ```
+
+### How Actors Work
+Actors raise some valid questions:
+- Can we assume any ordering of messages?
+- Aren't we causing race conditions?
+- What does **asynchronous** actually mean for actors?
+- How does this work with the JVM?
+
+Akka has a thread pool that it shares with actors.
+
+An actor has both a message handler and a message queue (mailbox). Whenever you send a message, its enqueued in this mailbox.
+
+An actor is a data structure, it's passive and needs a thread to run.
+
+Akka spawns a small number of treads (100s) ehich can handle a large amount of actors (1000000s per GB heap).
+
+Akka schedules actors for execution on these threads.
+
+When you send a message to an actor it's enqueued in the actor's mailbox. This is thread-safe.
+
+To process a message, Akka schedules a thread to run this actor.
+
+Messages are extracted (dequeued) from the mailbox, in order.
+
+For each message, the thread invokes the message handler. As a result, the actor might change its state or send messages to other actors. After that, the message is discarded and the process happens again.
+
+At some point the Akka thread scheduler unschedules the actor, at which point the thread releases control of this actor and moves on to do something else.
+
+This process provides certain guarantees:
+- only one thread operates on an actor at any time (actors are effectively single threaded so no locks are needed)
+- the thread may never release the actor in the middle of processing messages (processing messages is atomic)
+
+The message delivery environment is inherently unreliable but:
+- Akka offers at most once delivery (the actor will never receive duplicates of a message)
+- for any sender-receiver pair, the message order is maintained
+
+If Alice sends Bob message A followed by message B:
+- Bob will never receive duplicates of A or B
+- Bob will **always** receive A before B (possibly with some others in between)
