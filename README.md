@@ -304,3 +304,35 @@ You can communicate with actors using actor references. These can be sent as par
 Actors are aware of their own reference using `self`.
 
 Actors are aware of the actor reference that last sent them a message using `sender()` and can use this to reply to messages: `sender()` ! "well, hello there".
+
+It's a good practice to put messages in the companion object of the actor that supports them.
+
+```Scala
+// the domain of the actor
+object Counter {  
+	case object Increment  
+	case object Decrement  
+	case object Print  
+}  
+  
+class Counter extends Actor {  
+	// import everything from the companion object 
+	import Counter._  
+  
+  var count = 0  
+  
+	override def receive: Receive = {  
+	  case Increment => count += 1  
+		case Decrement => count -= 1  
+		case Print => println(s"[counter] My current count is $count")  
+	}  
+}  
+
+// import from counter domain
+import Counter._  
+val counter = system.actorOf(Props[Counter], "myCounter")  
+  
+(1 to 5).foreach(_ => counter ! Increment)  
+(1 to 3).foreach(_ => counter ! Decrement)  
+counter ! Print
+```
