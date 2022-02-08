@@ -428,3 +428,37 @@ class StatelessFussyKid extends Actor {
 `context.become()` and `context.unbecome()` let you change actor behaviour in response to messages.
 
 Akka always uses the latest handler on top of the stack. If the stack is empty, it calls `receive` and use that message handler.
+
+If you want to rewrite a stateful actor to be a stateless actor, you need to rewrite its mutable state into the paramaters of the handlers you want to support.
+
+```Scala
+// a stateless counter
+object Counter {  
+	case object Increment  
+	case object Decrement  
+	case object Print  
+}  
+  
+class Counter extends Actor {  
+	import Counter._  
+  
+  override def receive: Receive = countReceive(0)  
+  
+  def countReceive(currentCount: Int): Receive = {  
+	  case Increment =>  
+			println(s"[countReceive($currentCount)] incrementing")  
+      context.become(countReceive(currentCount + 1))  
+    case Decrement =>  
+			println(s"[countReceive($currentCount)] decrementing")  
+      context.become(countReceive(currentCount - 1))  
+    case Print => println(s"[countReceive($currentCount)] my current count is $currentCount")  
+  }  
+}  
+  
+import Counter._  
+val counter = system.actorOf(Props[Counter], "myCounter")  
+  
+(1 to 5).foreach(_ => counter ! Increment)  
+(1 to 3).foreach(_ => counter ! Decrement)  
+counter ! Print
+```
