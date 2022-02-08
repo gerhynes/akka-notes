@@ -375,3 +375,56 @@ The message delivery environment is inherently unreliable but:
 If Alice sends Bob message A followed by message B:
 - Bob will never receive duplicates of A or B
 - Bob will **always** receive A before B (possibly with some others in between)
+
+### Changing Actor Behaviour
+You often need to provide different kinds of behaviour depending on the state of an actor, but this can involve using mutable variables which isn't great.
+
+It's better to create a stateless actor which chooses to use one message handler or another.
+
+`context.become(anotherHandler)` lets you replace the current message handler with a new message handler of type Receive. 
+
+`context.become()` can take two parameters, the new message handler and a boolean for whether or not to discard the old message handler (defaults to true). If you pass `false`, the new message handler is added to a stack of previous message handlers.
+
+`context.unbecome()` will pop the current message handler off the stack and go back to the previous one.
+
+```Scala
+// with mutable state variable - don't do this
+class FussyKid extends Actor {  
+  import FussyKid._  
+  import Mom._  
+  
+  // internal state of the kid  
+	var state = HAPPY  
+	override def receive: Receive = {  
+	  case Food(VEGETABLE) => state = SAD  
+		case Food(CHOCOLATE) => state = HAPPY  
+		case Ask(_) =>  
+			if (state == HAPPY) sender() ! KidAccept  
+			else sender() ! KidReject  
+	}  
+}
+
+// stateless - do this
+class StatelessFussyKid extends Actor {  
+  import FussyKid._  
+  import Mom._  
+  
+  override def receive: Receive = happyReceive  
+  
+	def happyReceive: Receive = {  
+    case Food(VEGETABLE) => context.become(sadReceive, false) // change my receive handler to sadReceive  
+		case Food(CHOCOLATE) => context.become(happyReceive, false)
+		case Ask(_) => sender() ! KidAccept  
+	}  
+  
+  def sadReceive: Receive = {  
+    case Food(VEGETABLE) => context.become(sadReceive, false)  
+    case Food(CHOCOLATE) => context.unbecome()  
+    case Ask(_) => sender() ! KidReject  
+	}  
+}
+```
+
+`context.become()` and `context.unbecome()` let you change actor behaviour in response to messages.
+
+Akka always uses the latest handler on top of the stack. If the stack is empty, it calls `receive` and use that message handler.
