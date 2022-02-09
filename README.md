@@ -552,3 +552,53 @@ object CreditCard {
 	case object CheckStatus
 }
 ```
+
+### Actor Logging
+It's useful to log information from actors while they're running. Distributed systems are hard to debug and when something crashes, logs are essential for figuring out what went wrong.
+
+You can do this through explicit logging. 
+
+`Logging` has an apply method which takes in an actor system and a logging source.
+
+Logging is generally done on four levels:
+1. debug - the most verbose
+2. info - most benign messages
+3. warn - e.g. messages being sent to dead letters and lost
+4. error - an exception
+
+```Scala
+class SimpleActorWithExplicitLogger extends Actor {   
+	val logger = Logging(context.system, this)  // this - this exact actor
+  
+	override def receive: Receive = {  
+		case message => logger.info(message.toString)// log message 
+	}  
+}  
+  
+val system = ActorSystem("LoggingDemo")  
+val actor = system.actorOf(Props[SimpleActorWithExplicitLogger])  
+  
+actor ! "Logging a simple message"
+```
+
+You can also use the ``ActorLogging`` trait.
+
+You can interpolate parameters into your log.
+
+```Scala
+class ActorWithLogging extends Actor with ActorLogging {  
+	override def receive: Receive = {  
+	  case (a, b) => log.info("Two things: {} and {}", a, b) // Two things: 2 and 3  
+		case message => log.info(message.toString)  
+  }  
+}  
+  
+val simplerActor = system.actorOf(Props[ActorWithLogging])  
+simplerActor ! "Logging a simple message by extending a trait"  
+  
+simplerActor ! (42, 65)
+```
+
+Logging is done asynchronously to minimize performance impact. Akka logging is done using actors itslef. 
+
+Logging doesn't depend on a particular loggin gimplementation. The default logger just dumps things to standard output. You can insert another logger, such as SLF4J.
