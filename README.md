@@ -462,3 +462,93 @@ val counter = system.actorOf(Props[Counter], "myCounter")
 (1 to 3).foreach(_ => counter ! Decrement)  
 counter ! Print
 ```
+
+### Child Actors
+Actors can create other actors using the actor's context: `context.actorOf(Props[Child], name)`
+
+```Scala
+// create Parent and Child actors
+object Parent {  
+  case class CreateChild(name: String)  
+  case class TellChild(message: String)  
+}  
+
+class Parent extends Actor {  
+  import Parent._  
+  
+  override def receive: Receive = {  
+    case CreateChild(name) =>  
+		 	println(s"${self.path} creating child")  
+	    // create a new actor right HERE  
+			val childRef = context.actorOf(Props[Child], name)  
+	    context.become(withChild(childRef))  
+  }  
+  
+  def withChild(childRef: ActorRef): Receive = {  
+    case TellChild(message) => childRef forward message  
+	}  
+}  
+  
+class Child extends Actor {  
+  override def receive: Receive = {  
+    case message => println(s"${self.path} I got: $message")  
+  }  
+}  
+  
+import Parent._  
+  
+val system = ActorSystem("ParentChildDemo")  
+val parent = system.actorOf(Props[Parent], "parent")  
+parent ! CreateChild("child")  
+parent ! TellChild("hey Kid!")
+```
+
+This feature gives Akka the ability to create actor hierarchies where a parent actor supervises a child actor. 
+
+A parent actor can create multiple children and each child actor can itself create child actors, creating a hierarchy tree.
+
+Parent actors are supervised by Guardian actors (top level actors).
+
+Every Akka actor system has three guardian actors.
+1. /system = system guardian
+2. /user = user-level guardian
+3. / = root-guardian
+
+The root guardian manages both the system guardian and the use guardian.
+
+#### Actor Selection
+You can locate an actor in an actor hierarchy by creating an ActorSelection. You do this by passing the actor's path to `system.actorSelection()`. 
+
+```Scala
+val childSelection = system.actorSelection("/user/parent/child")
+childSelection ! "I found you"
+```
+
+This ActorSelection is a wrapper over a potential ActorRef that you can use to send a messsage.
+
+If the path is invalid, the ActorSelection will contain no actor and any message sent to it will be dropped (sent to dead letters).
+
+### Dangers
+Never pass mutable actor state, or the `this` reference, to child actors. This has the danger of breaking actor encapsulation because the child actor would suddenly have access to the internals of the parent actor.
+
+If an actor's state is changed without the use of messages, it is extremely hard to debug. Calling a method directly on an actor also bypasses all the logic and security checks that the receive message handler would perform. 
+
+When you use the `this` reference in a message, you're exposing yourself to method calls from other actors/threads, which exposes you to concurrency issues.
+
+Never directly call methods on actors, only send messages.
+
+This is called "closing over" mutable state or the `this` reference. Scala doesn't prevent this at compile time, so you need to make sure you maintain actor encapsulation.
+
+```Scala
+// do this
+object CreditCard {
+	case class AttachToAccount(bankAccountRef: ActorRef) // use ActorRef
+	case object CheckStatus
+}
+
+// not this
+object CreditCard {
+	case class AttachToAccount(bankAccount: NaiveBankAccount) // don't use actor instance
+	case object CheckStatus
+}
+```
