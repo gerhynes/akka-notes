@@ -689,3 +689,80 @@ val propsConfig = ConfigFactory.load("props/propsConfiguration.properties")
 println(s"properties config: ${propsConfig.getString("my.simpleProperty")}")  
 println(s"properties config: ${propsConfig.getString("akka.loglevel")}")
 ```
+
+## Akka Streams
+Treating data as a stream of elements instead of in its entirety is useful because it matches the way computers send and receive data (for example via TCP), but it is often also a necessity because data sets frequently become too large to be handled as a whole.
+
+Actors can be seen as dealing with streams as well: they send and receive series of messages in order to transfer data from one place to another.
+
+The Akka Streams API exists to safely formulate stream processing setups with actors.
+
+Akka Streams require an ActorSystem and an ActorMaterializer.
+
+An ActorMaterializer is a special kind of object that allocates the right resources for constructing Akka Sreams components.
+
+A Source publishes elements, a Sink consumes elements, and between them you can put a Flow.
+
+You construct an Akka Stream by connecting these components together. The connected components don't do anything until you connect them in a `runnableGraph` and call its `run` method. 
+
+The `run` method takes ActorMaterializer as an implicit value, and the ActorMaterializer handles the stream's resources.
+
+```Scala
+implicit val system = ActorSystem("AkkaStreamsRecap")  
+implicit val materializer = ActorMaterializer() 
+  
+val source = Source(1 to 100)  
+val sink = Sink.foreach[Int](println)  
+val flow = Flow[Int].map(x => x + 1)  
+  
+val runnableGraph = source.via(flow).to(sink)  
+runnableGraph.run()
+```
+
+### Materialized Values
+You can extract meaningful values from the running of a graph. This is called materialization.
+
+This example will produce a Future containing the sum of all the elements that flow through this graph. The Future will be completed when the stream terminates.
+
+When you materialize a runnableGraph, you materialize every component that composes that graph. You can choose which materialized value you care about.
+
+```Scala
+val simpleMaterializedValue = runnableGraph.run() // materialization  
+  
+// MATERIALIZED VALUE  
+val sumSink = Sink.fold[Int, Int](0)((currentSum, element) => currentSum + element)  
+val sumFuture = source.runWith(sumSink)
+
+sumFuture.onComplete {  
+	case Success(sum) => println(s"The sum of all the numbers from the simple source is: $sum")  
+	case Failure(ex) => println(s"Summing all the numbers from the simple source FAILED: $ex")  
+}
+```
+
+Materializing a graph means materializing **all** the components  
+
+A materialized value can be **anything at all**, a Future, a HTTP connection, it may or may not have anything to do with the actual elements that flow through the graph.
+
+### Backpressure
+Akka streams operate as a response to demand from downstream consumers. 
+
+Backpressure lets you slow down a producer if the consumers are slow and don't issue any demand. Backpressure happens transparently at runtime and components can choose how to respond in between a fast upstream and a slow downstream.
+
+Backpressure actions include:
+- buffer elements
+- apply a strategy in case the buffer overflows
+- drop elements
+- drop the buffer
+- fail the entire stream
+
+```Scala
+val bufferedFlow = Flow[Int].buffer(10, OverflowStrategy.dropHead)  
+  
+source.async  
+ .via(bufferedFlow).async  
+ .runForeach { e =>  
+		// a slow consumer  
+		Thread.sleep(100)  
+		println(e)  
+  }
+```
