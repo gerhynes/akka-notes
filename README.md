@@ -601,4 +601,91 @@ simplerActor ! (42, 65)
 
 Logging is done asynchronously to minimize performance impact. Akka logging is done using actors itslef. 
 
-Logging doesn't depend on a particular loggin gimplementation. The default logger just dumps things to standard output. You can insert another logger, such as SLF4J.
+Logging doesn't depend on a particular logging implementation. The default logger just dumps things to standard output. You can insert another logger, such as SLF4J.
+
+##  Akka Configuration
+Configuration in Akka is a series of name value pairs in a `.conf` file.
+
+Configurations can be nested under namespaces.
+
+```
+myConfig = 42  
+  
+aBigConfiguration {  
+  aParticularName = "akka2"  
+	# aBigConfiguration.aParticularName  
+  aNestedConfiguration {  
+	  anotherNestedName = 56  
+  }  
+}
+```
+
+### Inline Configuration
+You can pass a string to an actor system as a configuration using `ConfigFactory`.
+
+All configurations in Akka will start with an Akka namespace.
+
+```Scala
+// inline configuration
+val configString =  
+	"""  
+	| akka { 
+	|   loglevel = "ERROR" 
+	| } 
+	""".stripMargin  
+  
+val config = ConfigFactory.parseString(configString)  
+val system = ActorSystem("ConfigurationDemo", ConfigFactory.load(config))  
+val actor = system.actorOf(Props[SimpleLoggingActor])  
+  
+actor ! "A message to remember"
+```
+
+### Using a Config File
+When you create an actor system with no configuration, Akka automatically looks for a config file.
+
+Config files are usualy stored in the `src/main/resources`.
+
+```Scala
+val defaultConfigFileSystem = ActorSystem("DefaultConfigFileDemo")  
+val defaultConfigActor = defaultConfigFileSystem.actorOf(Props[SimpleLoggingActor])  
+defaultConfigActor ! "Remember me"
+```
+
+### Separate Configs in the Same File
+You can have multiple configurations in the same config file using seperate namespaces.
+
+```Scala
+// config file
+mySpecialConfig {  
+  akka {  
+    loglevel = INFO  
+  }  
+}
+
+// application
+val specialConfig = ConfigFactory.load().getConfig("mySpecialConfig")  
+val specialConfigSystem = ActorSystem("SpecialConfigDemo", specialConfig)  
+val specialConfigActor = specialConfigSystem.actorOf(Props[SimpleLoggingActor])  
+specialConfigActor ! "Remember me, I am special"
+```
+
+### Separate Configs in Another File
+You can pass the relative path of another configuration file (relative to the resources directory) to load a separate config file.
+```Scala
+val separateConfig = ConfigFactory.load("secretFolder/secretConfiguration.conf")  
+println(s"separate config log level: ${separateConfig.getString("akka.loglevel")}")
+```
+
+### Different Config File Formats
+You can also use JSON or Properties files for Akka configurations.
+
+```Scala
+val jsonConfig = ConfigFactory.load("json/jsonConfig.json")  
+println(s"json config: ${jsonConfig.getString("aJsonProperty")}")  
+println(s"json config: ${jsonConfig.getString("akka.loglevel")}")  
+  
+val propsConfig = ConfigFactory.load("props/propsConfiguration.properties")  
+println(s"properties config: ${propsConfig.getString("my.simpleProperty")}")  
+println(s"properties config: ${propsConfig.getString("akka.loglevel")}")
+```
